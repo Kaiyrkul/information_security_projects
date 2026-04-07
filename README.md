@@ -1,6 +1,6 @@
 # information_security_projects
 
-# Secure Password Infrastructure
+## Secure Password Infrastructure
 
 This repository contains an integrated security solution consisting of a high-entropy password generation service and a hardened Nginx reverse proxy for DDoS protection.
 
