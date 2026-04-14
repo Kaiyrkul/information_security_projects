@@ -2,14 +2,17 @@ import argparse
 import math
 import secrets
 import string
+import sys
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
 
 # Пороги для статуса (бит энтропии) — для API и CLI
 _ENTROPY_WEAK = 60
 _ENTROPY_MEDIUM = 80
+# Защита от чрезмерной длины (DoS по памяти/CPU)
+_MAX_PASSWORD_LENGTH = 256
 
 
 def password_status(entropy):
@@ -23,27 +26,37 @@ def password_status(entropy):
 
 def calculate_entropy(password, charset_size):
     """Считает энтропию пароля: E = L * log2(R)"""
-    if not password:
+    if not password or charset_size < 1:
         return 0
     entropy = len(password) * math.log2(charset_size)
     return round(entropy, 2)
 
 
-def generate_password(length, use_digits, use_symbols, use_upper):
-    # Набор символов: всегда начинаем со строчных букв
-    chars = string.ascii_lowercase
-    charset_size = 26
-
+def build_charset(use_lower, use_upper, use_digits, use_symbols):
+    """Собирает алфавит по включённым классам символов. Пустая строка — все классы выключены."""
+    parts = []
+    size = 0
+    if use_lower:
+        parts.append(string.ascii_lowercase)
+        size += 26
     if use_upper:
-        chars += string.ascii_uppercase
-        charset_size += 26
+        parts.append(string.ascii_uppercase)
+        size += 26
     if use_digits:
-        chars += string.digits
-        charset_size += 10
+        parts.append(string.digits)
+        size += 10
     if use_symbols:
-        chars += string.punctuation
-        charset_size += len(string.punctuation)
+        parts.append(string.punctuation)
+        size += len(string.punctuation)
+    return "".join(parts), size
 
+
+def generate_password(length, use_lower, use_upper, use_digits, use_symbols):
+    chars, charset_size = build_charset(
+        use_lower, use_upper, use_digits, use_symbols
+    )
+    if charset_size == 0:
+        raise ValueError("at least one character set must be enabled")
     # Используем secrets для криптографической безопасности
     password = "".join(secrets.choice(chars) for _ in range(length))
     return password, charset_size
@@ -59,6 +72,12 @@ def _parse_no_flag(value):
     return True
 
 
+@app.route("/")
+def index():
+    """Веб-интерфейс; JSON API остаётся на /generate."""
+    return render_template("index.html", max_length=_MAX_PASSWORD_LENGTH)
+
+
 @app.route("/generate", methods=["GET"])
 def generate():
     try:
@@ -67,14 +86,26 @@ def generate():
         return jsonify(error="length must be an integer"), 400
     if length < 1:
         return jsonify(error="length must be at least 1"), 400
+    if length > _MAX_PASSWORD_LENGTH:
+        return (
+            jsonify(
+                error="length too large",
+                max_length=_MAX_PASSWORD_LENGTH,
+            ),
+            400,
+        )
 
+    use_lower = not _parse_no_flag(request.args.get("no_lower"))
     use_digits = not _parse_no_flag(request.args.get("no_digits"))
     use_symbols = not _parse_no_flag(request.args.get("no_symbols"))
     use_upper = not _parse_no_flag(request.args.get("no_upper"))
 
-    pwd, charset_size = generate_password(
-        length, use_digits, use_symbols, use_upper
-    )
+    try:
+        pwd, charset_size = generate_password(
+            length, use_lower, use_upper, use_digits, use_symbols
+        )
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
     entropy = calculate_entropy(pwd, charset_size)
     status = password_status(entropy)
 
@@ -82,9 +113,26 @@ def generate():
 
 
 def run_cli(args):
-    pwd, size = generate_password(
-        args.length, args.digits, args.symbols, args.upper
-    )
+    if args.length < 1:
+        print("Ошибка: длина должна быть не меньше 1.", file=sys.stderr)
+        sys.exit(1)
+    if args.length > _MAX_PASSWORD_LENGTH:
+        print(
+            f"Ошибка: длина не больше {_MAX_PASSWORD_LENGTH} (запрошено {args.length}).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    try:
+        pwd, size = generate_password(
+            args.length,
+            args.lower,
+            args.upper,
+            args.digits,
+            args.symbols,
+        )
+    except ValueError as e:
+        print(f"Ошибка: {e}", file=sys.stderr)
+        sys.exit(1)
     entropy = calculate_entropy(pwd, size)
     status = password_status(entropy)
 
@@ -107,6 +155,13 @@ if __name__ == "__main__":
         help="Сгенерировать пароль в терминале (без запуска веб-сервера)",
     )
     gen.add_argument("-l", "--length", type=int, default=16, help="Длина пароля")
+    gen.add_argument(
+        "--no-lower",
+        action="store_false",
+        dest="lower",
+        default=True,
+        help="Исключить строчные буквы",
+    )
     gen.add_argument(
         "--no-digits",
         action="store_false",

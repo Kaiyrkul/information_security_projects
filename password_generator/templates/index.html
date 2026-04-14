@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Генератор паролей</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/app.css') }}"
+    />
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Генератор паролей</h1>
+        <p>Криптостойкая случайность на стороне сервера (модуль secrets)</p>
+      </header>
+
+      <main class="card">
+        <div class="field">
+          <label class="primary" for="length-num">Длина</label>
+          <div class="length-row">
+            <input
+              type="range"
+              id="length-range"
+              min="1"
+              max="{{ max_length }}"
+              value="16"
+              aria-label="Длина пароля"
+            />
+            <input
+              type="number"
+              id="length-num"
+              min="1"
+              max="{{ max_length }}"
+              value="16"
+              aria-describedby="length-hint"
+            />
+          </div>
+          <span id="length-hint" class="entropy" style="margin-top: 0.35rem; display: block"
+            >от 1 до {{ max_length }} символов</span
+          >
+        </div>
+
+        <div class="field">
+          <span class="primary">Наборы символов</span>
+          <div class="sets" role="group" aria-label="Наборы символов">
+            <label class="set-item">
+              <input type="checkbox" id="set-lower" checked />
+              <span>Строчные латинские (a–z)</span>
+            </label>
+            <label class="set-item">
+              <input type="checkbox" id="set-upper" checked />
+              <span>Заглавные латинские (A–Z)</span>
+            </label>
+            <label class="set-item">
+              <input type="checkbox" id="set-digits" checked />
+              <span>Цифры (0–9)</span>
+            </label>
+            <label class="set-item">
+              <input type="checkbox" id="set-symbols" checked />
+              <span>Спецсимволы</span>
+            </label>
+          </div>
+        </div>
+
+        <button type="button" class="btn" id="btn-gen">Сгенерировать</button>
+
+        <div class="alert" id="alert" hidden role="alert"></div>
+
+        <section class="out" id="out" hidden>
+          <div class="pwd-row">
+            <div class="pwd-box" id="pwd-text" aria-live="polite"></div>
+            <button type="button" class="btn-copy" id="btn-copy">Копировать</button>
+          </div>
+          <div class="meta">
+            <span class="badge" id="status-badge"></span>
+            <span class="entropy"
+              >Энтропия: <strong id="entropy-val">—</strong> бит</span
+            >
+          </div>
+        </section>
+      </main>
+
+      <footer>JSON API: <code>/generate</code></footer>
+    </div>
+
+    <script>
+      (function () {
+        const maxLen = {{ max_length }};
+        const range = document.getElementById("length-range");
+        const num = document.getElementById("length-num");
+        const sets = {
+          lower: document.getElementById("set-lower"),
+          upper: document.getElementById("set-upper"),
+          digits: document.getElementById("set-digits"),
+          symbols: document.getElementById("set-symbols"),
+        };
+        const btnGen = document.getElementById("btn-gen");
+        const btnCopy = document.getElementById("btn-copy");
+        const alertEl = document.getElementById("alert");
+        const out = document.getElementById("out");
+        const pwdText = document.getElementById("pwd-text");
+        const statusBadge = document.getElementById("status-badge");
+        const entropyVal = document.getElementById("entropy-val");
+
+        const statusLabels = {
+          Weak: "Слабый",
+          Medium: "Средний",
+          Secure: "Надёжный",
+        };
+        const statusClass = {
+          Weak: "weak",
+          Medium: "medium",
+          Secure: "secure",
+        };
+
+        function syncRangeFromNum() {
+          let v = parseInt(num.value, 10);
+          if (Number.isNaN(v)) v = 1;
+          v = Math.min(maxLen, Math.max(1, v));
+          num.value = v;
+          range.value = v;
+        }
+
+        function syncNumFromRange() {
+          num.value = range.value;
+        }
+
+        range.addEventListener("input", syncNumFromRange);
+        num.addEventListener("input", syncRangeFromNum);
+        num.addEventListener("blur", syncRangeFromNum);
+
+        function buildQuery() {
+          const params = new URLSearchParams();
+          params.set("length", num.value);
+          if (!sets.lower.checked) params.set("no_lower", "1");
+          if (!sets.upper.checked) params.set("no_upper", "1");
+          if (!sets.digits.checked) params.set("no_digits", "1");
+          if (!sets.symbols.checked) params.set("no_symbols", "1");
+          return params.toString();
+        }
+
+        function showError(msg) {
+          alertEl.textContent = msg;
+          alertEl.hidden = false;
+        }
+
+        function hideError() {
+          alertEl.hidden = true;
+          alertEl.textContent = "";
+        }
+
+        btnGen.addEventListener("click", async function () {
+          hideError();
+          syncRangeFromNum();
+
+          if (
+            !sets.lower.checked &&
+            !sets.upper.checked &&
+            !sets.digits.checked &&
+            !sets.symbols.checked
+          ) {
+            showError("Выберите хотя бы один набор символов.");
+            return;
+          }
+
+          btnGen.disabled = true;
+          try {
+            const res = await fetch("/generate?" + buildQuery(), {
+              headers: { Accept: "application/json" },
+            });
+            const data = await res.json().catch(function () {
+              return {};
+            });
+
+            if (!res.ok) {
+              showError(data.error || "Ошибка сервера (" + res.status + ")");
+              out.hidden = true;
+              return;
+            }
+
+            pwdText.textContent = data.password;
+            entropyVal.textContent = data.entropy;
+            const st = data.status || "";
+            statusBadge.textContent = statusLabels[st] || st;
+            statusBadge.className = "badge " + (statusClass[st] || "");
+            out.hidden = false;
+          } catch (e) {
+            showError("Не удалось связаться с сервером. Запущено ли приложение?");
+            out.hidden = true;
+          } finally {
+            btnGen.disabled = false;
+          }
+        });
+
+        btnCopy.addEventListener("click", async function () {
+          const t = pwdText.textContent;
+          if (!t) return;
+          try {
+            await navigator.clipboard.writeText(t);
+            btnCopy.textContent = "Скопировано";
+            setTimeout(function () {
+              btnCopy.textContent = "Копировать";
+            }, 1500);
+          } catch (e) {
+            btnCopy.textContent = "Ошибка";
+            setTimeout(function () {
+              btnCopy.textContent = "Копировать";
+            }, 1500);
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>
