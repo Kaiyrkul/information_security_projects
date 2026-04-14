@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Генератор паролей</title>
+    <title>Password Generator</title>
     <link
       rel="stylesheet"
       href="{{ url_for('static', filename='css/app.css') }}"
@@ -12,13 +12,13 @@
   <body>
     <div class="wrap">
       <header>
-        <h1>Генератор паролей</h1>
-        <p>Криптостойкая случайность на стороне сервера (модуль secrets)</p>
+        <h1>Password Generator</h1>
+        <p>Cryptographically secure randomness on the server side (`secrets`)</p>
       </header>
 
       <main class="card">
         <div class="field">
-          <label class="primary" for="length-num">Длина</label>
+          <label class="primary" for="length-num">Length</label>
           <div class="length-row">
             <input
               type="range"
@@ -26,7 +26,7 @@
               min="1"
               max="{{ max_length }}"
               value="16"
-              aria-label="Длина пароля"
+              aria-label="Password length"
             />
             <input
               type="number"
@@ -38,45 +38,45 @@
             />
           </div>
           <span id="length-hint" class="entropy" style="margin-top: 0.35rem; display: block"
-            >от 1 до {{ max_length }} символов</span
+            >from 1 to {{ max_length }} characters</span
           >
         </div>
 
         <div class="field">
-          <span class="primary">Наборы символов</span>
-          <div class="sets" role="group" aria-label="Наборы символов">
+          <span class="primary">Character sets</span>
+          <div class="sets" role="group" aria-label="Character sets">
             <label class="set-item">
               <input type="checkbox" id="set-lower" checked />
-              <span>Строчные латинские (a–z)</span>
+              <span>Lowercase Latin letters (a–z)</span>
             </label>
             <label class="set-item">
               <input type="checkbox" id="set-upper" checked />
-              <span>Заглавные латинские (A–Z)</span>
+              <span>Uppercase Latin letters (A–Z)</span>
             </label>
             <label class="set-item">
               <input type="checkbox" id="set-digits" checked />
-              <span>Цифры (0–9)</span>
+              <span>Digits (0–9)</span>
             </label>
             <label class="set-item">
               <input type="checkbox" id="set-symbols" checked />
-              <span>Спецсимволы</span>
+              <span>Symbols</span>
             </label>
           </div>
         </div>
 
-        <button type="button" class="btn" id="btn-gen">Сгенерировать</button>
+        <button type="button" class="btn" id="btn-gen">Generate</button>
 
         <div class="alert" id="alert" hidden role="alert"></div>
 
         <section class="out" id="out" hidden>
           <div class="pwd-row">
             <div class="pwd-box" id="pwd-text" aria-live="polite"></div>
-            <button type="button" class="btn-copy" id="btn-copy">Копировать</button>
+            <button type="button" class="btn-copy" id="btn-copy">Copy</button>
           </div>
           <div class="meta">
             <span class="badge" id="status-badge"></span>
             <span class="entropy"
-              >Энтропия: <strong id="entropy-val">—</strong> бит</span
+              >Entropy: <strong id="entropy-val">—</strong> bits</span
             >
           </div>
         </section>
@@ -105,9 +105,9 @@
         const entropyVal = document.getElementById("entropy-val");
 
         const statusLabels = {
-          Weak: "Слабый",
-          Medium: "Средний",
-          Secure: "Надёжный",
+          Weak: "Weak",
+          Medium: "Medium",
+          Secure: "Secure",
         };
         const statusClass = {
           Weak: "weak",
@@ -161,7 +161,7 @@
             !sets.digits.checked &&
             !sets.symbols.checked
           ) {
-            showError("Выберите хотя бы один набор символов.");
+            showError("Select at least one character set.");
             return;
           }
 
@@ -175,7 +175,7 @@
             });
 
             if (!res.ok) {
-              showError(data.error || "Ошибка сервера (" + res.status + ")");
+              showError(data.error || "Server error (" + res.status + ")");
               out.hidden = true;
               return;
             }
@@ -187,7 +187,7 @@
             statusBadge.className = "badge " + (statusClass[st] || "");
             out.hidden = false;
           } catch (e) {
-            showError("Не удалось связаться с сервером. Запущено ли приложение?");
+            showError("Could not reach server. Is the application running?");
             out.hidden = true;
           } finally {
             btnGen.disabled = false;
@@ -199,14 +199,14 @@
           if (!t) return;
           try {
             await navigator.clipboard.writeText(t);
-            btnCopy.textContent = "Скопировано";
+            btnCopy.textContent = "Copied";
             setTimeout(function () {
-              btnCopy.textContent = "Копировать";
+              btnCopy.textContent = "Copy";
             }, 1500);
           } catch (e) {
-            btnCopy.textContent = "Ошибка";
+            btnCopy.textContent = "Error";
             setTimeout(function () {
-              btnCopy.textContent = "Копировать";
+              btnCopy.textContent = "Copy";
             }, 1500);
           }
         });

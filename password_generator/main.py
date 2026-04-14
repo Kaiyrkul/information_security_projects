@@ -8,15 +8,15 @@ from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
 
-# Пороги для статуса (бит энтропии) — для API и CLI
+# Entropy thresholds (bits) for API and CLI status labels
 _ENTROPY_WEAK = 60
 _ENTROPY_MEDIUM = 80
-# Защита от чрезмерной длины (DoS по памяти/CPU)
+# Prevent excessive length values (basic memory/CPU DoS guard)
 _MAX_PASSWORD_LENGTH = 256
 
 
 def password_status(entropy):
-    """Человекочитаемый статус надёжности по энтропии (для JSON и CLI)."""
+    """Human-readable password strength status for JSON and CLI."""
     if entropy < _ENTROPY_WEAK:
         return "Weak"
     if entropy < _ENTROPY_MEDIUM:
@@ -25,7 +25,7 @@ def password_status(entropy):
 
 
 def calculate_entropy(password, charset_size):
-    """Считает энтропию пароля: E = L * log2(R)"""
+    """Calculate password entropy: E = L * log2(R)."""
     if not password or charset_size < 1:
         return 0
     entropy = len(password) * math.log2(charset_size)
@@ -33,7 +33,7 @@ def calculate_entropy(password, charset_size):
 
 
 def build_charset(use_lower, use_upper, use_digits, use_symbols):
-    """Собирает алфавит по включённым классам символов. Пустая строка — все классы выключены."""
+    """Build charset from enabled symbol classes. Empty result means all classes are disabled."""
     parts = []
     size = 0
     if use_lower:
@@ -57,7 +57,7 @@ def generate_password(length, use_lower, use_upper, use_digits, use_symbols):
     )
     if charset_size == 0:
         raise ValueError("at least one character set must be enabled")
-    # Используем secrets для криптографической безопасности
+    # Use secrets for cryptographic randomness
     password = "".join(secrets.choice(chars) for _ in range(length))
     return password, charset_size
 
@@ -74,7 +74,7 @@ def _parse_no_flag(value):
 
 @app.route("/")
 def index():
-    """Веб-интерфейс; JSON API остаётся на /generate."""
+    """Web UI entrypoint; JSON API stays on /generate."""
     return render_template("index.html", max_length=_MAX_PASSWORD_LENGTH)
 
 
@@ -114,11 +114,11 @@ def generate():
 
 def run_cli(args):
     if args.length < 1:
-        print("Ошибка: длина должна быть не меньше 1.", file=sys.stderr)
+        print("Error: length must be at least 1.", file=sys.stderr)
         sys.exit(1)
     if args.length > _MAX_PASSWORD_LENGTH:
         print(
-            f"Ошибка: длина не больше {_MAX_PASSWORD_LENGTH} (запрошено {args.length}).",
+            f"Error: length must be <= {_MAX_PASSWORD_LENGTH} (requested {args.length}).",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -131,57 +131,57 @@ def run_cli(args):
             args.symbols,
         )
     except ValueError as e:
-        print(f"Ошибка: {e}", file=sys.stderr)
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
     entropy = calculate_entropy(pwd, size)
     status = password_status(entropy)
 
     print("\n" + "=" * 40)
-    print(f"Сгенерированный пароль: {pwd}")
-    print(f"Длина: {len(pwd)} | Мощность алфавита: {size}")
-    print(f"Энтропия: {entropy} бит | Статус: {status}")
+    print(f"Generated password: {pwd}")
+    print(f"Length: {len(pwd)} | Charset size: {size}")
+    print(f"Entropy: {entropy} bits | Status: {status}")
     print("=" * 40 + "\n")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Secure Password Generator — API (по умолчанию) или CLI (подкоманда generate)"
+        description="Secure Password Generator — API by default or CLI via the generate subcommand"
     )
     sub = parser.add_subparsers(dest="command")
 
     gen = sub.add_parser(
         "generate",
         aliases=["gen"],
-        help="Сгенерировать пароль в терминале (без запуска веб-сервера)",
+        help="Generate a password in terminal (without running web server)",
     )
-    gen.add_argument("-l", "--length", type=int, default=16, help="Длина пароля")
+    gen.add_argument("-l", "--length", type=int, default=16, help="Password length")
     gen.add_argument(
         "--no-lower",
         action="store_false",
         dest="lower",
         default=True,
-        help="Исключить строчные буквы",
+        help="Exclude lowercase letters",
     )
     gen.add_argument(
         "--no-digits",
         action="store_false",
         dest="digits",
         default=True,
-        help="Исключить цифры",
+        help="Exclude digits",
     )
     gen.add_argument(
         "--no-symbols",
         action="store_false",
         dest="symbols",
         default=True,
-        help="Исключить спецсимволы",
+        help="Exclude symbols",
     )
     gen.add_argument(
         "--no-upper",
         action="store_false",
         dest="upper",
         default=True,
-        help="Исключить заглавные буквы",
+        help="Exclude uppercase letters",
     )
 
     args = parser.parse_args()
