@@ -1,252 +1,408 @@
-# information_security_projects
+# Secure Password Infrastructure
 
-## Secure Password Infrastructure
+Professional security-focused mini platform combining:
+- a cryptographically secure password generation service;
+- an Nginx reverse proxy hardened for request abuse scenarios.
 
-This repository contains two connected parts:
-1. a cryptographically secure password generator (`password_generator`);
-2. an infrastructure security layer for incoming traffic (`nginx_proxy`).
+This repository is designed as a practical demonstration of **defense in depth** for web services: secure business logic behind a hardened HTTP perimeter.
 
-The goal is to combine security at the **data level** (strong passwords) and at the **perimeter level** (request abuse resistance).
+## Table of Contents
 
----
-
-## Project Structure
-
-- `password_generator` — Flask application with:
-  - JSON API (`/generate`);
-  - web interface (`/`);
-  - CLI mode (`python main.py generate ...`).
-- `nginx_proxy` — Nginx reverse proxy with rate limiting and basic hardening.
-
----
-
-## How the Two Projects Work Together
-
-`nginx_proxy` receives HTTP requests from users and forwards them to `password_generator`.
-
-So:
-- `password_generator` handles secure generation and password quality scoring;
-- `nginx_proxy` protects the service from request spikes and reduces attack surface.
-
-This is a classic **defense-in-depth** architecture.
+- [Project Description](#project-description)
+- [Problem This Project Solves](#problem-this-project-solves)
+- [Architecture Overview](#architecture-overview)
+- [Technology Stack](#technology-stack)
+- [Repository Structure](#repository-structure)
+- [Security Logic and Design Decisions](#security-logic-and-design-decisions)
+- [Setup and Run Instructions](#setup-and-run-instructions)
+- [API Reference](#api-reference)
+- [CLI Reference](#cli-reference)
+- [Screenshots and Diagrams](#screenshots-and-diagrams)
+- [Troubleshooting](#troubleshooting)
+- [Limitations and Production Notes](#limitations-and-production-notes)
 
 ---
 
-## Project 1: Password Generator
+## Project Description
 
-### What It Does
+The project consists of two integrated components:
 
-- Generates passwords based on selected length and character sets;
-- Calculates entropy using `E = L * log2(R)`;
-- Returns a security status (`Weak`, `Medium`, `Secure`);
-- Supports API, web UI, and CLI.
+1. **`password_generator`**: a Flask service that generates high-entropy passwords using a cryptographically secure random source (`secrets`), computes entropy, and exposes both API and UI.
+2. **`nginx_proxy`**: an infrastructure layer that fronts the service with request-rate controls and baseline HTTP hardening.
 
-### Functions and Security Mechanisms Used (and Why)
-
-#### 1) `secrets.choice(...)` (CSPRNG)
-- Uses Python `secrets`, not `random`.
-- **Why:** `random` is fine for simulations but is not suitable for security-sensitive randomness.
-- `secrets` relies on OS-level secure randomness and is appropriate for password generation.
-
-#### 2) Entropy calculation `L * log2(R)`
-- `L` is password length, `R` is charset size.
-- **Why:** this is a common, practical estimate of brute-force complexity for uniformly generated passwords.
-- It gives users a measurable quality indicator.
-
-#### 3) `build_charset(...)`
-- Builds the final alphabet from enabled sets: lower/upper/digits/symbols.
-- **Why:** keeps charset logic centralized, easier to validate and test edge cases.
-
-#### 4) Input validation
-- Length limits: minimum `1`, maximum `_MAX_PASSWORD_LENGTH` (`256`).
-- Empty charset check (when all sets are disabled).
-- **Why:** prevents invalid states and basic DoS attempts via oversized `length`.
-
-#### 5) Safe error handling
-- Invalid input returns `400` with JSON error details.
-- **Why:** predictable API behavior is safer than uncaught exceptions (`500`).
-
-#### 6) Web page on `/`
-- HTML page calls `/generate` via `fetch` and displays results.
-- **Why:** easier demonstration without `curl`, while API remains the integration interface.
+Together, these components illustrate secure application behavior at two levels:
+- **Application/data level**: secure secret generation and safe input handling.
+- **Infrastructure/perimeter level**: abuse mitigation and reduced information leakage.
 
 ---
 
-## Project 2: Nginx Proxy (DDoS/Hardening Layer)
+## Problem This Project Solves
 
-### What It Does
+Many password utilities focus only on convenience (quick random strings) but ignore operational security. This project addresses both:
 
-- Receives external requests;
-- Limits request rate per client IP;
-- Proxies traffic to the internal generator service;
-- Reduces exposed server information.
+- **Password quality risk**: weak or predictable passwords are vulnerable to brute force.
+- **Service availability risk**: unprotected endpoints can be overloaded by request bursts.
+- **Configuration disclosure risk**: default server setups expose unnecessary technical details.
 
-### Directives Used (and Why)
-
-#### 1) `limit_req_zone $binary_remote_addr zone=addr:10m rate=2r/s;`
-- Tracks request counters by IP.
-- **Why:** simple baseline protection from HTTP flood/abuse.
-
-#### 2) `limit_req zone=addr burst=5;`
-- Allows short bursts while limiting sustained overload.
-- **Why:** balances user experience and abuse control.
-
-#### 3) `server_tokens off;`
-- Hides Nginx version details.
-- **Why:** reduces useful fingerprinting data for automated scanners.
-
-#### 4) `client_max_body_size 1k;`
-- Restricts request body size.
-- **Why:** cuts unnecessary attack surface for large payload attempts.
-
-#### 5) Security headers
-- `X-Frame-Options: DENY`
-- `X-Content-Type-Options: nosniff`
-- **Why:** baseline browser-side hardening against clickjacking and MIME sniffing.
+This project solves the above by combining:
+- CSPRNG-based password generation;
+- entropy visibility for user decision-making;
+- API input validation and safe failure behavior;
+- Nginx-based rate limiting and hardening headers.
 
 ---
 
-## Information Security Logic Used in the Repository
+## Architecture Overview
 
-1. **Cryptographic secret generation**
-   - Password generation uses CSPRNG (`secrets`) only.
-2. **Safe input handling**
-   - Request parameters are validated;
-   - Invalid cases return controlled errors.
-3. **Abuse resistance**
-   - Backend length limits;
-   - Proxy-level rate limiting.
-4. **Information minimization**
-   - Server version tokens are hidden.
-5. **Separation of responsibilities**
-   - App layer = business logic;
-   - Proxy layer = perimeter protection.
+### High-level flow
 
-Why this design instead of putting everything in one place:
-- easier maintenance and scaling;
-- safer separation of concerns;
-- more effective defense in depth.
+1. User accesses web UI or API.
+2. Requests hit Nginx (`nginx_proxy`).
+3. Nginx applies rate limits and hardening controls.
+4. Allowed requests are proxied to Flask (`password_generator`).
+5. Flask validates input, generates password, computes entropy, and returns JSON.
+
+### Architecture diagram
+
+```mermaid
+flowchart LR
+    A[User Browser or API Client] --> B[Nginx Reverse Proxy]
+    B -->|limit_req + headers + proxy rules| C[Flask Password Service]
+    C --> D[Entropy Calculation]
+    C --> E[CSPRNG secrets.choice]
+    D --> C
+    E --> C
+    C --> B
+    B --> A
+```
+
+### Security boundary model
+
+- **Boundary 1 (Internet/client to proxy):** Nginx handles perimeter controls.
+- **Boundary 2 (proxy to app):** only internal service traffic is forwarded.
+- **Boundary 3 (app logic):** controlled input and deterministic error handling.
 
 ---
 
-## Run and Test (Detailed)
+## Technology Stack
 
-There are two ways to run the project: local Flask only, or Nginx + Docker.
+### Backend
 
-### Option A: Run Password Generator Only (No Docker)
+- **Python 3.11+**
+- **Flask** (API + server-rendered UI)
+- Python standard libraries:
+  - `secrets` for CSPRNG;
+  - `math` for entropy formula;
+  - `argparse` for CLI interface.
 
-#### 1) Go to project directory
+### Infrastructure
+
+- **Nginx (alpine image)** as reverse proxy
+- **Docker Compose** for multi-service orchestration
+
+### Frontend
+
+- Server-rendered HTML (`Jinja2` via Flask templates)
+- Vanilla JavaScript (`fetch`) for API calls
+- Custom CSS (no external UI frameworks)
+
+---
+
+## Repository Structure
+
+```text
+information_security_projects/
+├── README.md
+├── password_generator/
+│   ├── main.py
+│   ├── requirements.txt
+│   ├── Dockerfile
+│   ├── templates/
+│   │   └── index.html
+│   └── static/
+│       └── css/
+│           └── app.css
+└── nginx_proxy/
+    ├── nginx.conf
+    ├── docker-compose.yml
+    └── simulate_load.py
+```
+
+---
+
+## Security Logic and Design Decisions
+
+### 1) Why `secrets` instead of `random`
+
+- `random` is deterministic and not suitable for security-sensitive token/password generation.
+- `secrets` is designed for cryptographic use and relies on secure OS randomness.
+
+### 2) Why entropy is calculated
+
+- Formula: `E = L * log2(R)`
+  - `L`: password length
+  - `R`: charset size
+- Provides a transparent security estimate to users and API consumers.
+- Supports objective classification (`Weak`, `Medium`, `Secure`).
+
+### 3) Why strict input validation is enforced
+
+- Length is constrained (`1..256`) to avoid resource abuse.
+- Empty charset is rejected to prevent runtime failure and invalid output.
+- Invalid input returns controlled `400` responses (no stack traces or undefined behavior).
+
+### 4) Why Nginx rate limiting is used
+
+- `limit_req_zone` and `limit_req` provide a lightweight baseline against request flooding.
+- `burst` allows small legitimate spikes while still limiting sustained abuse.
+
+### 5) Why hardening headers are enabled
+
+- `X-Frame-Options: DENY` mitigates clickjacking.
+- `X-Content-Type-Options: nosniff` prevents MIME sniffing behavior in browsers.
+- `server_tokens off` reduces fingerprinting data.
+
+### 6) Why the architecture is split into two projects
+
+- Keeps concerns isolated:
+  - app logic in Flask;
+  - perimeter controls in Nginx.
+- Easier to maintain, test, and evolve.
+- Better reflects production-grade security layering.
+
+---
+
+## Setup and Run Instructions
+
+You can run the platform in two modes:
+
+1. **Local Flask mode** (quick start, no Docker).
+2. **Nginx + Docker Compose mode** (full architecture).
+
+### Prerequisites
+
+- Python 3.11 or newer
+- `pip`
+- Optional: Docker Desktop (for full Nginx + app deployment)
+
+---
+
+### Option A: Local run (Flask only)
+
+#### Step 1: Enter project folder
+
 ```powershell
 cd D:\information_security_projects\password_generator
 ```
 
-#### 2) Install dependencies
+#### Step 2: Install dependencies
+
 ```powershell
 pip install -r requirements.txt
 ```
-If you do not use `requirements.txt`, this is enough:
+
+If needed:
+
 ```powershell
 pip install flask
 ```
 
-#### 3) Start Flask server
+#### Step 3: Start application
+
 ```powershell
 python main.py
 ```
 
-#### 4) Open in browser
-- Web interface: `http://127.0.0.1:5000/`
-- API endpoint: `http://127.0.0.1:5000/generate?length=16`
+#### Step 4: Open in browser
 
-#### 5) Stop server
-- Press `Ctrl + C` in the same terminal.
+- UI: `http://127.0.0.1:5000/`
+- API example: `http://127.0.0.1:5000/generate?length=16`
+
+#### Step 5: Stop application
+
+Press `Ctrl + C` in the same terminal.
 
 ---
 
-### Option B: Run Through Nginx + Docker Compose
+### Option B: Full run (Nginx + Flask with Docker Compose)
 
-> Requires Docker Desktop installed and available in terminal (`docker` command must work).
+> Docker must be installed and available in terminal (`docker --version` works).
 
-#### 1) Go to proxy directory
+#### Step 1: Enter proxy folder
+
 ```powershell
 cd D:\information_security_projects\nginx_proxy
 ```
 
-#### 2) Start containers
+#### Step 2: Build and start services
+
 ```powershell
 docker compose up --build
 ```
 
-#### 3) Verify in browser
-- Web interface through proxy: `http://127.0.0.1/`
-- API through proxy: `http://127.0.0.1/generate?length=16`
+#### Step 3: Access through Nginx
 
-#### 4) Stop containers
-- Press `Ctrl + C` in the compose terminal.
-- Optionally remove containers/network:
+- UI: `http://127.0.0.1/`
+- API example: `http://127.0.0.1/generate?length=16`
+
+#### Step 4: Stop and cleanup
+
+Stop running stack:
+
+```powershell
+Ctrl + C
+```
+
+Cleanup containers/network:
+
 ```powershell
 docker compose down
 ```
 
 ---
 
-## API Usage
+### Optional load simulation (rate-limit demo)
 
-### GET `/generate`
+From `nginx_proxy`:
 
-Query parameters:
-- `length` — password length (`1..256`);
-- `no_lower` — disable lowercase (`1/true/on`);
-- `no_upper` — disable uppercase;
-- `no_digits` — disable digits;
-- `no_symbols` — disable symbols.
+```powershell
+python simulate_load.py --url "http://127.0.0.1/generate?length=12" -n 40 -w 20
+```
 
-Example:
+Expected outcome:
+- mixture of success responses and rate-limited responses under burst traffic.
+
+---
+
+## API Reference
+
+### Endpoint
+
+- `GET /generate`
+
+### Query parameters
+
+- `length` (integer, required via default fallback): `1..256`
+- `no_lower` (optional): disable lowercase set when truthy
+- `no_upper` (optional): disable uppercase set when truthy
+- `no_digits` (optional): disable digits set when truthy
+- `no_symbols` (optional): disable symbols set when truthy
+
+### Example request
+
 ```text
 /generate?length=20&no_symbols=1
 ```
 
-Success response (`200`):
+### Success response (`200`)
+
 ```json
 {
-  "password": "....",
+  "password": "A_secure_generated_password",
   "entropy": 114.6,
   "status": "Secure"
 }
 ```
 
-Error responses (`400`):
-- invalid `length`;
-- length less than 1;
-- length greater than `max_length`;
-- all character sets disabled.
+### Error responses (`400`)
+
+- `length must be an integer`
+- `length must be at least 1`
+- `length too large` (includes `max_length`)
+- `at least one character set must be enabled`
 
 ---
 
-## CLI Usage
+## CLI Reference
 
-### Generate password in terminal
+### Generate password
+
 ```powershell
 cd D:\information_security_projects\password_generator
 python main.py generate --length 24
 ```
 
-Flag examples:
+### Useful flags
+
+- `--no-lower`
+- `--no-upper`
+- `--no-digits`
+- `--no-symbols`
+
+### Example
+
 ```powershell
-python main.py generate --length 20 --no-symbols
-python main.py generate --length 16 --no-lower --no-upper --no-symbols
+python main.py generate --length 16 --no-symbols
 ```
 
 CLI output includes:
 - generated password;
 - length and charset size;
-- entropy in bits;
+- entropy (bits);
 - security status.
 
 ---
 
-## Limitations and Next Improvements
+## Screenshots and Diagrams
 
-- Built-in Flask server is suitable for development, not production.
-- For production: use WSGI (gunicorn/uwsgi), TLS/HTTPS, stronger security headers, and monitoring.
-- Current version is focused on learning/demo goals with baseline information security practices.
+### UI screenshot
+
+![Web UI](docs/screenshots/web-ui.png)
+
+> Add your captured UI image at `docs/screenshots/web-ui.png`.
+
+### API response screenshot
+
+![API Response](docs/screenshots/api-response.png)
+
+> Add your captured API response image at `docs/screenshots/api-response.png`.
+
+### Architecture diagram
+
+The Mermaid diagram in this README is the primary architecture diagram.
+If you prefer static images (for PDF/slide usage), export and store as `docs/diagrams/architecture.png`.
+
+![Architecture Diagram](docs/diagrams/architecture.png)
+
+---
+
+## Troubleshooting
+
+### `docker` command is not recognized
+
+- Install Docker Desktop.
+- Restart terminal/IDE.
+- Verify:
+
+```powershell
+docker --version
+```
+
+### Browser cannot open UI
+
+- Ensure server is running.
+- For local Flask mode: use `http://127.0.0.1:5000/`.
+- For Docker mode: use `http://127.0.0.1/`.
+
+### Port already in use
+
+- Stop existing process/container using that port.
+- Restart application stack.
+
+---
+
+## Limitations and Production Notes
+
+- Current Flask server is development-grade; production should use WSGI (Gunicorn/uWSGI equivalent setup).
+- TLS/HTTPS termination should be enabled for production deployment.
+- Additional production controls are recommended:
+  - centralized logging and monitoring;
+  - stricter response headers (e.g., CSP);
+  - secrets management and CI security checks.
+
+---
+
+## License
+
+This project is currently intended for educational and demonstration purposes.  
+Add a formal license file if public/open-source distribution is planned.
