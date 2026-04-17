@@ -1,7 +1,5 @@
 # Secure Password Infrastructure
 ---
-
-### Author Information
 - **Student:** Kaiyrkul Kanatbekova
 - **Year:** 3rd Year Software Engineering Student, AUCA
 - **Course:** Information Security
