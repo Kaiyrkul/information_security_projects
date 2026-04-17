@@ -345,25 +345,33 @@ CLI output includes:
 
 ## Screenshots and Diagrams
 
-### UI screenshot
-
-![Web UI](docs/screenshots/web-ui.png)
-
-> Add your captured UI image at `docs/screenshots/web-ui.png`.
-
-### API response screenshot
-
-![API Response](docs/screenshots/api-response.png)
-
-> Add your captured API response image at `docs/screenshots/api-response.png`.
-
-### Architecture diagram
-
-The Mermaid diagram in this README is the primary architecture diagram.
-If you prefer static images (for PDF/slide usage), export and store as `docs/diagrams/architecture.png`.
+### 1) Architecture Diagram
+The following diagram illustrates the **Defense in Depth** model, showing how Nginx acts as a security perimeter for the Flask application.
 
 ![Architecture Diagram](docs/diagrams/architecture.png)
 
+> **Security Note:** This flow demonstrates the isolation of the application logic from direct public exposure, mitigating risk at the infrastructure level.
+
+### 2) Web User Interface
+The web interface allows users to interact with the generator and receive immediate feedback on password strength.
+
+![Web UI](docs/screenshots/web-ui.jpg)
+
+> **Security Note:** The UI displays real-time entropy calculation and security status (e.g., "Secure"), empowering users to make informed decisions based on cryptographic metrics.
+
+### 3) API Response
+The service provides a structured JSON output for seamless and secure integration with other platforms.
+
+![API Response](docs/screenshots/api-response.jpg)
+
+> **Security Note:** Every response includes the entropy bit-count, ensuring that the consuming system can programmatically verify the strength of the generated secret.
+
+### 4) Rate Limiting Demonstration
+This screenshot captures the system's behavior under a simulated high-load or brute-force scenario.
+
+![Rate Limit Demo](docs/screenshots/rate-limit-demo.jpg)
+
+> **Security Note:** You can observe Nginx returning statuses, effectively neutralizing potential DoS attacks and protecting server resources.
 ---
 
 ## Troubleshooting
