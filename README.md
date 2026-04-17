@@ -1,4 +1,14 @@
 # Secure Password Infrastructure
+---
+
+### Author Information
+- **Student:** Kaiyrkul Kanatbekova
+- **Year:** 3rd Year Software Engineering Student, AUCA
+- **Course:** Information Security
+- **Instructor:** Gulzada Esenalieva
+- **Date:** Аpril 2026
+
+---
 
 Professional security-focused mini platform combining:
 - a cryptographically secure password generation service;
