@@ -5,6 +5,7 @@
 - **Course:** Information Security
 - **Instructor:** Gulzada Esenalieva
 - **Date:** Аpril 2026
+- **Demo video:** https://youtu.be/2TRjSuJrImg?feature=shared 
 
 ---
 
