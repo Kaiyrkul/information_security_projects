@@ -30,7 +30,7 @@ This repository is designed as a practical demonstration of **defense in depth**
 - [CLI Reference](#cli-reference)
 - [Screenshots and Diagrams](#screenshots-and-diagrams)
 - [Troubleshooting](#troubleshooting)
-- [Limitations and Production Notes](#limitations-and-production-notes)
+- [Security Peer Review & Reflection](#security-peer-review-&-reflection)
 
 ---
 
@@ -410,18 +410,23 @@ docker --version
 
 ---
 
-## Limitations and Production Notes
+## Security Peer Review & Reflection
 
-- Current Flask server is development-grade; production should use WSGI (Gunicorn/uWSGI equivalent setup).
-- TLS/HTTPS termination should be enabled for production deployment.
-- Additional production controls are recommended:
-  - centralized logging and monitoring;
-  - stricter response headers (e.g., CSP);
-  - secrets management and CI security checks.
+Following a peer review, I have identified and acknowledged several security trade-offs made in this educational MVP. These points are critical for transitioning to a production-grade environment:
+https://youtu.be/3gtBuCjcNpI from Nurkyz Sydykbekova  
 
+### 1. Data Leakage in Logs (GET vs. POST)
+- **Observation**: Currently, the system uses GET requests for simplicity and ease of testing via URLs. This means passwords could potentially be stored in browser history or server logs.
+- **Future Action**: In a production version, all secret generation requests should be handled via **POST** requests with the secret returned in the response body (not the URL) to ensure zero-trace logging.
+
+### 2. Transport Layer Security (TLS/HTTPS)
+- **Observation**: The current setup uses plain HTTP. Data is vulnerable to interception (Man-in-the-Middle attacks) during transmission.
+- **Future Action**: Implementing **TLS/SSL** at the Nginx level is a top priority. This would encrypt all traffic between the client and the proxy, ensuring the password remains secret until it reaches the user's screen.
+
+### 3. Redundancy Cleanup
+- **Observation**: There were redundant README files in subdirectories.
+- **Action**: I have centralized all documentation into the root `README.md` to maintain a "Single Source of Truth" and reduce the attack surface of outdated documentation.
 ---
 
 ## License
-
 This project is currently intended for educational and demonstration purposes.  
-Add a formal license file if public/open-source distribution is planned.
