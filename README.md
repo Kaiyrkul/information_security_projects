@@ -7,6 +7,8 @@
 - **Date:** Аpril 2026
 - **Demo video:** https://youtu.be/2TRjSuJrImg?feature=shared 
 
+- **Feedback Video:** https://youtu.be/3gtBuCjcNpI from Nurkyz Sydykbekova
+
 ---
 
 Professional security-focused mini platform combining:
